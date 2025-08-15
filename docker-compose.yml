@@ -1,0 +1,46 @@
+version: '3.8'
+
+services:
+  postgres:
+    image: postgres:16-alpine
+    container_name: dragon-ball-postgres
+    environment:
+      POSTGRES_USER: ${DB_USER:-dragon_ball_user}
+      POSTGRES_PASSWORD: ${DB_PASSWORD:-dragon_ball_pass}
+      POSTGRES_DB: ${DB_NAME:-dragon_ball_db}
+    ports:
+      - "${DB_PORT:-5432}:5432"
+    volumes:
+      - ./sql:/docker-entrypoint-initdb.d:ro
+
+  redis:
+    image: redis:7-alpine
+    container_name: dragon-ball-redis
+    command: redis-server --requirepass ${REDIS_PASSWORD:-dragon_ball_redis_pass}
+    ports:
+      - "${REDIS_PORT:-6379}:6379"
+
+  api:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: dragon-ball-api
+    environment:
+      DB_HOST: postgres
+      DB_PORT: 5432
+      DB_USER: ${DB_USER:-dragon_ball_user}
+      DB_PASSWORD: ${DB_PASSWORD:-dragon_ball_pass}
+      DB_NAME: ${DB_NAME:-dragon_ball_db}
+      REDIS_HOST: redis
+      REDIS_PORT: 6379
+      REDIS_PASSWORD: ${REDIS_PASSWORD:-dragon_ball_redis_pass}
+      REDIS_DB: ${REDIS_DB:-0}
+      API_PORT: ${API_PORT:-8080}
+      DRAGONBALL_API_URL: ${DRAGONBALL_API_URL:-https://dragonball-api.com/api}
+      DRAGONBALL_API_TIMEOUT: ${DRAGONBALL_API_TIMEOUT:-10}
+    ports:
+      - "${API_PORT:-8080}:8080"
+    depends_on:
+      - postgres
+      - redis
+    restart: unless-stopped
