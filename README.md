@@ -27,46 +27,161 @@ La API implementa un **flujo inteligente de búsqueda**:
 4. 💿 Guarda automáticamente el resultado
 ```
 
+## ⚡ **Cómo Funciona el Sistema**
+
+La API utiliza una **estrategia de cache inteligente** para optimizar el rendimiento:
+
+### **🔄 Flujo de Búsqueda de Personajes:**
+```
+📝 Request: {"name": "Goku"}
+    ↓(se manda la request)
+🔍 1. Buscar en Redis Cache (clave: "character:goku")
+    ↓ (si no existe)
+💾 2. Buscar en Base de Datos Local (PostgreSQL)
+    ↓ (si no existe)
+🌐 3. Consultar API Externa de Dragon Ball
+    ↓ (evalúa respuesta)
+💿 4. Guardar resultado en Cache:
+    • ✅ Coincidencia exacta → BD + Cache personaje
+    • ⚠️ Búsqueda parcial → Cache sugerencias  
+    • ❌ Sin resultados → Cache "no encontrado"
+    ↓
+✅ 5. Responder al cliente
+```
+
+### **💡 Ventajas del Cache:**
+- **⚡ Primera consulta:** `~300ms` (API externa + BD)
+- **🚀 Consultas siguientes:** `~5ms` (desde cache)
+- **🛡️ Protección API externa:** Evita saturar el servicio externo
+- **📊 Sugerencias inteligentes:** Cache de búsquedas parciales como en la api externa
+- **🛡️ Protección anti-spam:** Cachea búsquedas fallidas para evitar consultas repetitivas a la API externa
+
+### **🔒 Ejemplos de Protección:**
+```
+❌ "PersonajeInventado" → Cache 30min → No más llamadas a API externa
+⚠️ "Go" → Cache 1h → Sugerencias rápidas sin re-consultar
+✅ "Goku" → Cache 24h → Respuesta instantánea desde cache
+```
+
 ---
 
 ## 📋 **Ejemplos de Uso**
 
-### **Health Check**
+### **🩺 Health Check**
 ```bash
-curl http://localhost:8080/health
+curl http://localhost:8080/api/v1/health
+```
+**➜ Respuesta 200:**
+```json
+{
+  "status": "healthy",
+  "timestamp": "2024-01-15T10:30:00Z",
+  "services": {
+    "database": {"status": "up", "message": "PostgreSQL connected"},
+    "cache": {"status": "up", "message": "Redis connected"}
+  }
+}
 ```
 
-### **Crear Personaje (Primera vez)**
+---
+
+### **✅ Crear Personaje (Primera vez - Éxito)**
 ```bash
 curl -X POST http://localhost:8080/api/v1/characters \
   -H "Content-Type: application/json" \
   -d '{"name": "Goku"}'
 ```
-**➜ Respuesta:** `201 Created` con datos del personaje
+**➜ Respuesta 201 Created:**
+```json
+{
+  "result": {
+    "id": 1,
+    "external_id": 1,
+    "name": "Goku",
+    "race": "Saiyan",
+    "ki": "60.000.000",
+    "description": "El protagonista de la serie, un Saiyan criado en la Tierra...",
+    "image": "https://dragonball-api.com/characters/goku_normal.webp"
+  }
+}
+```
 
-### **Buscar Personaje Existente**
+---
+
+### **⚠️ Personaje Ya Existe**
 ```bash
 curl -X POST http://localhost:8080/api/v1/characters \
   -H "Content-Type: application/json" \
   -d '{"name": "Goku"}'
 ```
-**➜ Respuesta:** `409 Conflict` - "Character already exists"
+**➜ Respuesta 409 Conflict:**
+```json
+{
+  "result": {
+    "error": "Character already exists",
+    "data": {
+      "id": 1,
+      "name": "Goku",
+      "race": "Saiyan",
+      "ki": "60.000.000"
+    }
+  }
+}
+```
 
-### **Nombre Incorrecto**
+---
+
+### **🔍 Búsqueda Parcial (Sugerencias)**
 ```bash
 curl -X POST http://localhost:8080/api/v1/characters \
   -H "Content-Type: application/json" \
-  -d '{"name": "Gok"}'
+  -d '{"name": "Go"}'
 ```
-**➜ Respuesta:** `400 Bad Request` con sugerencias `["Goku", "Gohan", "Goten"]`
+**➜ Respuesta 400 Bad Request:**
+```json
+{
+  "result": {
+    "error": "No exact match found for 'Go'",
+    "suggestions": ["Goku", "Gohan", "Goten", "Gotenks", "Gogeta"]
+  }
+}
+```
 
-### **Personaje Inexistente**
+---
+
+### **❌ Personaje Inexistente**
 ```bash
 curl -X POST http://localhost:8080/api/v1/characters \
   -H "Content-Type: application/json" \
   -d '{"name": "PersonajeInventado"}'
 ```
-**➜ Respuesta:** `400 Bad Request` con lista de personajes disponibles
+**➜ Respuesta 400 Bad Request:**
+```json
+{
+  "result": {
+    "error": "No character found for 'PersonajeInventado'",
+    "suggestions": []
+  }
+}
+```
+
+---
+
+### **📝 Validación de Entrada**
+```bash
+curl -X POST http://localhost:8080/api/v1/characters \
+  -H "Content-Type: application/json" \
+  -d '{"name": ""}'
+```
+**➜ Respuesta 400 Bad Request:**
+```json
+{
+  "result": {
+    "error": "Name is required and cannot be empty",
+    "suggestions": []
+  }
+}
+```
 
 ---
 
