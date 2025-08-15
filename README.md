@@ -69,7 +69,7 @@ La API utiliza una **estrategia de cache inteligente** para optimizar el rendimi
 
 ### **🩺 Health Check**
 ```bash
-curl http://localhost:8080/api/v1/health
+curl http://localhost:8080/health
 ```
 **➜ Respuesta 200:**
 ```json
